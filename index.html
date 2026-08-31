@@ -44,7 +44,13 @@
       <div class="section-heading memo-heading-row"><h2 id="memo-heading">保存したメモ</h2><span id="memo-count" class="memo-count">0件</span></div>
       <div id="memo-list"></div>
     </section>
-  </main>
+    <section class="diagnostic-section" aria-labelledby="diagnostic-heading">
+      <button id="diagnostic-toggle" class="diagnostic-toggle" type="button" aria-expanded="false" aria-controls="diagnostic-panel">診断ログを表示</button>
+      <div id="diagnostic-panel" class="diagnostic-panel" hidden>
+        <h2 id="diagnostic-heading">音声認識 診断ログ</h2>
+        <pre id="diagnostic-log">録音を開始すると、ここに認識イベントが表示されます。</pre>
+      </div>
+    </section>  </main>
 
   <template id="memo-template">
     <article class="memo-card">
