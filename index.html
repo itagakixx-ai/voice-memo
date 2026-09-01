@@ -42,10 +42,15 @@
 
     <section class="memo-section" aria-labelledby="memo-heading">
       <div class="section-heading memo-heading-row"><h2 id="memo-heading">保存したメモ</h2><span id="memo-count" class="memo-count">0件</span></div>
+      <div class="memo-filters" role="group" aria-label="メモの絞り込み">
+        <button class="filter-button is-active" type="button" data-filter="all" aria-pressed="true">すべて</button>
+        <button class="filter-button" type="button" data-filter="pending" aria-pressed="false">未対応</button>
+        <button class="filter-button" type="button" data-filter="completed" aria-pressed="false">完了</button>
+      </div>
       <div id="memo-list"></div>
     </section>
     <section class="diagnostic-section" aria-labelledby="diagnostic-heading">
-      <button id="diagnostic-toggle" class="diagnostic-toggle" type="button" aria-expanded="false" aria-controls="diagnostic-panel">診断ログを表示</button>
+      <button id="diagnostic-toggle" class="diagnostic-toggle" type="button" aria-expanded="false" aria-controls="diagnostic-panel">音声認識の診断</button>
       <div id="diagnostic-panel" class="diagnostic-panel" hidden>
         <h2 id="diagnostic-heading">音声認識 診断ログ</h2>
         <pre id="diagnostic-log">録音を開始すると、ここに認識イベントが表示されます。</pre>
@@ -54,10 +59,14 @@
 
   <template id="memo-template">
     <article class="memo-card">
-      <time class="memo-date"></time><p class="memo-text"></p>
-      <button class="delete-button" type="button" aria-label="このメモを削除">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg>削除
-      </button>
+      <div class="memo-card-top"><time class="memo-date"></time><button class="status-button" type="button"></button></div>
+      <p class="memo-text"></p>
+      <textarea class="edit-textarea" rows="4" aria-label="メモ本文を編集" hidden></textarea>
+      <div class="memo-actions">
+        <button class="edit-button" type="button">編集</button>
+        <button class="delete-button" type="button" aria-label="このメモを削除"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg>削除</button>
+      </div>
+      <div class="edit-actions" hidden><button class="cancel-edit-button" type="button">キャンセル</button><button class="save-edit-button" type="button">変更を保存</button></div>
     </article>
   </template>
   <script src="app.js" defer></script>
