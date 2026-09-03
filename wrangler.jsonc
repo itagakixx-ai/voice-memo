@@ -1,0 +1,12 @@
+{
+  "name": "voice-memo-api",
+  "main": "worker.js",
+  "compatibility_date": "2026-09-03",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "voice-memo-db",
+      "database_id": "2cc1584a-b1a4-46fb-987f-c0a656ad886e"
+    }
+  ]
+}
