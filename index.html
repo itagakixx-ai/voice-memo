@@ -53,8 +53,12 @@
       <button id="diagnostic-toggle" class="diagnostic-toggle" type="button" aria-expanded="false" aria-controls="diagnostic-panel">音声認識の診断</button>
       <div id="diagnostic-panel" class="diagnostic-panel" hidden>
         <div class="notification-test">
-          <button id="notification-test-button" type="button">通知をテスト</button>
+          <div class="notification-actions">
+            <button id="notification-test-button" type="button">通知をテスト</button>
+            <button id="push-subscribe-button" type="button">この端末を通知登録</button>
+          </div>
           <p id="notification-test-result" role="status" aria-live="polite"></p>
+          <p id="push-subscribe-result" role="status" aria-live="polite"></p>
         </div>
         <h2 id="diagnostic-heading">音声認識 診断ログ</h2>
         <pre id="diagnostic-log">録音を開始すると、ここに認識イベントが表示されます。</pre>
