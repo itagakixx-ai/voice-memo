@@ -2,6 +2,9 @@
   "name": "voice-memo-api",
   "main": "worker.js",
   "compatibility_date": "2026-09-03",
+  "triggers": {
+    "crons": ["30 23 * * *", "30 8 * * *"]
+  },
   "d1_databases": [
     {
       "binding": "DB",

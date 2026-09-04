@@ -69,6 +69,18 @@ async function isPushTestAuthorized(request, expectedToken) {
 }
 
 export default {
+  async scheduled(controller) {
+    // Cron expressions use UTC: 23:30 = 08:30 JST, 08:30 = 17:30 JST.
+    switch (controller.cron) {
+      case "30 23 * * *":
+        console.log("morning reminder triggered");
+        break;
+      case "30 8 * * *":
+        console.log("evening reminder triggered");
+        break;
+    }
+  },
+
   async fetch(request, env) {
     const url = new URL(request.url);
     const origin = request.headers.get("Origin");
@@ -220,6 +232,30 @@ export default {
         console.error("D1 POST /push/subscribe error", error);
         return jsonResponse(request, { error: "Database error" }, 500);
       }
+    }
+
+    // Temporary, fail-closed diagnostic route; expires without another deploy.
+    if (request.method === "POST" && url.pathname === "/push/auth-check") {
+      const expiresAt = Date.parse(env.PUSH_AUTH_CHECK_EXPIRES_AT || "");
+      if (!Number.isFinite(expiresAt) || Date.now() >= expiresAt) {
+        return jsonResponse(request, { error: "Not found" }, 404);
+      }
+      const authorization = request.headers.get("Authorization");
+      const extracted = typeof authorization === "string" &&
+        authorization.startsWith("Bearer ") && authorization.length > 7;
+      const candidate = extracted ? authorization.slice(7) : "";
+      const expected = env.PUSH_TEST_TOKEN;
+      const secretLength = typeof expected === "string" ? expected.length : null;
+      const response = jsonResponse(request, {
+        authorizationPresent: authorization !== null,
+        bearerExtracted: extracted,
+        candidateLength: candidate.length,
+        secretLength,
+        lengthsMatch: secretLength === candidate.length,
+        comparisonMatches: await secureTokenMatches(candidate, expected),
+      });
+      response.headers.set("Cache-Control", "no-store");
+      return response;
     }
 
     if (request.method === "POST" && url.pathname === "/push/test") {
