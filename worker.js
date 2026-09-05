@@ -68,17 +68,99 @@ async function isPushTestAuthorized(request, expectedToken) {
   return secureTokenMatches(authorization.slice(prefix.length), expectedToken);
 }
 
-export default {
-  async scheduled(controller) {
-    // Cron expressions use UTC: 23:30 = 08:30 JST, 08:30 = 17:30 JST.
-    switch (controller.cron) {
-      case "30 23 * * *":
-        console.log("morning reminder triggered");
-        break;
-      case "30 8 * * *":
-        console.log("evening reminder triggered");
-        break;
+async function sendPushNotifications(env, payload) {
+  if (typeof env.VAPID_PRIVATE_KEY !== "string" || env.VAPID_PRIVATE_KEY.length === 0) {
+    throw new Error("Missing VAPID configuration");
+  }
+  const query = await env.DB.prepare(
+    "SELECT id, endpoint, p256dh, auth FROM push_subscriptions ORDER BY id",
+  ).all();
+  const summary = { ok: true, attempted: query.results.length, succeeded: 0,
+    invalidRemoved: 0, failed: 0, networkErrors: 0, failuresByStatus: {} };
+  const vapid = { subject: VAPID_SUBJECT, publicKey: VAPID_PUBLIC_KEY,
+    privateKey: env.VAPID_PRIVATE_KEY };
+  const payloadData = JSON.stringify(payload);
+
+  for (const subscription of query.results) {
+    try {
+      const requestOptions = await buildPushPayload(
+        { data: payloadData, options: { ttl: 60 } },
+        { endpoint: subscription.endpoint, expirationTime: null,
+          keys: { p256dh: subscription.p256dh, auth: subscription.auth } },
+        vapid,
+      );
+      const response = await fetch(subscription.endpoint, requestOptions);
+      if (response.ok) summary.succeeded += 1;
+      else if (response.status === 404 || response.status === 410) {
+        await env.DB.prepare("DELETE FROM push_subscriptions WHERE id = ?")
+          .bind(subscription.id).run();
+        summary.invalidRemoved += 1;
+      } else {
+        summary.failed += 1;
+        const status = String(response.status);
+        summary.failuresByStatus[status] = (summary.failuresByStatus[status] || 0) + 1;
+      }
+    } catch {
+      summary.failed += 1;
+      summary.networkErrors += 1;
     }
+  }
+  summary.ok = summary.failed === 0;
+  return summary;
+}
+
+async function extractReminderMemos(controller, env) {
+  const period = controller.cron === "30 23 * * *" ? "morning"
+    : controller.cron === "30 8 * * *" ? "evening" : null;
+  if (!period) return;
+  console.log(`${period} reminder triggered`);
+
+  try {
+    const jstOffset = 9 * 60 * 60 * 1000;
+    const day = 24 * 60 * 60 * 1000;
+    const time = controller.scheduledTime;
+    if (typeof time !== "number" || !Number.isFinite(time)) {
+      throw new Error("Invalid scheduled time");
+    }
+    const start = Math.floor((time + jstOffset) / day) * day - jstOffset;
+    const startIso = new Date(start).toISOString();
+    const endIso = new Date(start + day).toISOString();
+    // Compare instants rather than text so ISO offsets and milliseconds work.
+    const condition = period === "morning"
+      ? "completed = 0 AND julianday(created_at) < julianday(?)"
+      : "completed = 0 AND julianday(created_at) >= julianday(?) AND julianday(created_at) < julianday(?)";
+    const bounds = period === "morning" ? [startIso] : [startIso, endIso];
+    const queries = [env.DB.prepare(`SELECT COUNT(*) AS count FROM memos WHERE ${condition}`).bind(...bounds)];
+    // Opt in only during local verification; production defaults to counts only.
+    const preview = env.REMINDER_DEBUG_PREVIEW === "true";
+    if (preview) {
+      queries.push(env.DB.prepare(`SELECT substr(text, 1, 100) AS text FROM memos WHERE ${condition} ORDER BY julianday(created_at), id LIMIT 5`).bind(...bounds));
+    }
+    const results = await env.DB.batch(queries);
+    if (results.some((result) => result.success === false)) throw new Error("Query failed");
+    const count = results[0].results[0].count;
+    console.log("reminder memo count", { period, count });
+    if (preview) console.log("reminder memo preview", { period, texts: results[1].results.map((memo) => memo.text) });
+    return { period, count };
+  } catch {
+    console.error("reminder memo extraction failed", { period });
+    // Mark the scheduled invocation failed without exposing the original error.
+    throw new Error("Reminder memo extraction failed");
+  }
+}
+
+export default {
+  async scheduled(controller, env) {
+    const reminder = await extractReminderMemos(controller, env);
+    if (!reminder || reminder.count === 0) return;
+    const body = reminder.period === "morning"
+      ? `未対応メモが${reminder.count}件あります`
+      : `今日の未対応メモが${reminder.count}件あります`;
+    const summary = await sendPushNotifications(env, { title: "声メモ", body, url: "./" });
+    console.log("scheduled Web Push completed", { period: reminder.period,
+      memoCount: reminder.count, attempted: summary.attempted,
+      succeeded: summary.succeeded, invalidRemoved: summary.invalidRemoved,
+      failed: summary.failed, networkErrors: summary.networkErrors });
   },
 
   async fetch(request, env) {
@@ -263,87 +345,10 @@ export default {
         return jsonResponse(request, { error: "Unauthorized" }, 401);
       }
 
-      if (
-        typeof env.VAPID_PRIVATE_KEY !== "string" ||
-        env.VAPID_PRIVATE_KEY.length === 0
-      ) {
-        return jsonResponse(request, { error: "Server configuration error" }, 500);
-      }
-
-      let subscriptions;
       try {
-        const query = await env.DB.prepare(
-          `SELECT id, endpoint, p256dh, auth
-           FROM push_subscriptions
-           ORDER BY id`,
-        ).all();
-        subscriptions = query.results;
-      } catch {
-        console.error("D1 push subscription query failed");
-        return jsonResponse(request, { error: "Database error" }, 500);
-      }
-
-      const payloadData = JSON.stringify({
-        title: "声メモ",
-        body: "テスト通知です",
-        url: "./",
-      });
-      const vapid = {
-        subject: VAPID_SUBJECT,
-        publicKey: VAPID_PUBLIC_KEY,
-        privateKey: env.VAPID_PRIVATE_KEY,
-      };
-      const summary = {
-        ok: true,
-        attempted: subscriptions.length,
-        succeeded: 0,
-        invalidRemoved: 0,
-        failed: 0,
-        networkErrors: 0,
-        failuresByStatus: {},
-      };
-
-      for (const subscription of subscriptions) {
-        try {
-          const requestOptions = await buildPushPayload(
-            {
-              data: payloadData,
-              options: { ttl: 60 },
-            },
-            {
-              endpoint: subscription.endpoint,
-              expirationTime: null,
-              keys: {
-                p256dh: subscription.p256dh,
-                auth: subscription.auth,
-              },
-            },
-            vapid,
-          );
-          const pushResponse = await fetch(subscription.endpoint, requestOptions);
-
-          if (pushResponse.ok) {
-            summary.succeeded += 1;
-          } else if (pushResponse.status === 404 || pushResponse.status === 410) {
-            await env.DB.prepare(
-              "DELETE FROM push_subscriptions WHERE id = ?",
-            )
-              .bind(subscription.id)
-              .run();
-            summary.invalidRemoved += 1;
-          } else {
-            summary.failed += 1;
-            const statusKey = String(pushResponse.status);
-            summary.failuresByStatus[statusKey] =
-              (summary.failuresByStatus[statusKey] || 0) + 1;
-          }
-        } catch {
-          summary.failed += 1;
-          summary.networkErrors += 1;
-        }
-      }
-
-      summary.ok = summary.failed === 0;
+        const summary = await sendPushNotifications(env, {
+          title: "声メモ", body: "テスト通知です", url: "./",
+        });
       console.info("Web Push test completed", {
         attempted: summary.attempted,
         succeeded: summary.succeeded,
@@ -351,6 +356,10 @@ export default {
         failed: summary.failed,
       });
       return jsonResponse(request, summary);
+      } catch {
+        console.error("Web Push test failed");
+        return jsonResponse(request, { error: "Push delivery error" }, 500);
+      }
     }
 
     const memoIdMatch = url.pathname.match(/^\/memos\/(\d+)$/);
