@@ -68,7 +68,7 @@ async function isPushTestAuthorized(request, expectedToken) {
   return secureTokenMatches(authorization.slice(prefix.length), expectedToken);
 }
 
-async function sendPushNotifications(env, payload) {
+async function sendPushNotifications(env, payload, options = { ttl: 60 }) {
   if (typeof env.VAPID_PRIVATE_KEY !== "string" || env.VAPID_PRIVATE_KEY.length === 0) {
     throw new Error("Missing VAPID configuration");
   }
@@ -84,7 +84,7 @@ async function sendPushNotifications(env, payload) {
   for (const subscription of query.results) {
     try {
       const requestOptions = await buildPushPayload(
-        { data: payloadData, options: { ttl: 60 } },
+        { data: payloadData, options },
         { endpoint: subscription.endpoint, expirationTime: null,
           keys: { p256dh: subscription.p256dh, auth: subscription.auth } },
         vapid,
@@ -151,13 +151,24 @@ async function extractReminderMemos(controller, env) {
 
 export default {
   async scheduled(controller, env) {
+    const workerStartedAt = new Date().toISOString();
     const reminder = await extractReminderMemos(controller, env);
     if (!reminder || reminder.count === 0) return;
+    const scheduledTime = new Date(controller.scheduledTime).toISOString();
+    const jstDate = new Date(controller.scheduledTime + 9 * 60 * 60 * 1000)
+      .toISOString().slice(0, 10).replaceAll("-", "");
+    const isMorning = reminder.period === "morning";
     const body = reminder.period === "morning"
       ? `未対応メモが${reminder.count}件あります`
       : `今日の未対応メモが${reminder.count}件あります`;
-    const summary = await sendPushNotifications(env, { title: "声メモ", body, url: "./" });
+    const notificationTag = `voice-memo-${reminder.period}-${jstDate}`;
+    const summary = await sendPushNotifications(env, {
+      title: isMorning ? "声メモ【朝8:30】" : "声メモ【夕17:30】",
+      body, url: "./", period: reminder.period, scheduledTime, notificationTag,
+    }, { ttl: 3600, urgency: "high", topic: `vm-${isMorning ? "m" : "e"}-${jstDate}` });
+    const pushCompletedAt = new Date().toISOString();
     console.log("scheduled Web Push completed", { period: reminder.period,
+      scheduledTime, workerStartedAt, pushCompletedAt,
       memoCount: reminder.count, attempted: summary.attempted,
       succeeded: summary.succeeded, invalidRemoved: summary.invalidRemoved,
       failed: summary.failed, networkErrors: summary.networkErrors });
