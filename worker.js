@@ -30,6 +30,36 @@ function jsonResponse(request, data, status = 200) {
   });
 }
 
+const TASK_PRIORITIES = new Set(["urgent", "normal", "low"]);
+const TASK_CATEGORIES = new Set(["repair", "estimate", "visit", "inspection", "contact", "order", "other"]);
+const DUE_PERIODS = new Set(["none", "all_day", "morning", "afternoon", "exact", "this_week"]);
+
+function normalizeDueFields(dueDate, dueTime, duePeriod) {
+  if (!DUE_PERIODS.has(duePeriod)) throw new Error("Invalid due period");
+  if (duePeriod === "none") return { dueDate: null, dueTime: null, duePeriod, dueAt: null };
+  if (typeof dueDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) throw new Error("Invalid due date");
+  const date = new Date(`${dueDate}T00:00:00+09:00`);
+  if (Number.isNaN(date.getTime()) || new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit" }).format(date) !== dueDate) throw new Error("Invalid due date");
+  let time = null;
+  let end = "23:59:59.999";
+  if (duePeriod === "morning") end = "11:59:59.999";
+  if (duePeriod === "afternoon") end = "17:59:59.999";
+  if (duePeriod === "exact") {
+    if (typeof dueTime !== "string" || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(dueTime)) throw new Error("Invalid due time");
+    time = dueTime;
+    end = `${dueTime}:00.000`;
+  }
+  return { dueDate, dueTime: time, duePeriod, dueAt: new Date(`${dueDate}T${end}+09:00`).toISOString() };
+}
+
+function memoTaskResponse(memo) {
+  return { ...memo, completed: Boolean(memo.completed), rawText: memo.rawText ?? memo.text,
+    category: TASK_CATEGORIES.has(memo.category) ? memo.category : "other",
+    priority: TASK_PRIORITIES.has(memo.priority) ? memo.priority : "normal",
+    dueDate: memo.dueDate ?? null, dueTime: memo.dueTime ?? null,
+    duePeriod: DUE_PERIODS.has(memo.duePeriod) ? memo.duePeriod : "none", dueAt: memo.dueAt ?? null };
+}
+
 async function secureTokenMatches(candidate, expected) {
   if (
     typeof candidate !== "string" ||
@@ -199,6 +229,13 @@ export default {
           `SELECT
             id,
             text,
+            raw_text AS rawText,
+            category,
+            priority,
+            due_date AS dueDate,
+            due_time AS dueTime,
+            due_period AS duePeriod,
+            due_at AS dueAt,
             completed,
             created_at AS createdAt,
             updated_at AS updatedAt
@@ -206,10 +243,7 @@ export default {
           ORDER BY created_at DESC`,
         ).all();
 
-        const memos = results.map((memo) => ({
-          ...memo,
-          completed: Boolean(memo.completed),
-        }));
+        const memos = results.map(memoTaskResponse);
 
         return jsonResponse(request, memos);
       } catch (error) {
@@ -241,12 +275,27 @@ export default {
         return jsonResponse(request, { error: "Invalid memo data" }, 400);
       }
 
+      let task;
+      try {
+        const priority = body.priority ?? "normal";
+        const category = body.category ?? "other";
+        if (!TASK_PRIORITIES.has(priority) || !TASK_CATEGORIES.has(category)) throw new Error("Invalid task fields");
+        const due = normalizeDueFields(body.dueDate ?? null, body.dueTime ?? null, body.duePeriod ?? "none");
+        if (body.rawText !== undefined && (typeof body.rawText !== "string" || body.rawText.trim() === "")) throw new Error("Invalid raw text");
+        task = { priority, category, rawText: body.rawText?.trim() ?? text.trim(), ...due };
+      } catch {
+        return jsonResponse(request, { error: "Invalid task data" }, 400);
+      }
+
       try {
         const result = await env.DB.prepare(
-          `INSERT INTO memos (text, completed, created_at, updated_at)
-           VALUES (?, ?, ?, NULL)`,
+          `INSERT INTO memos (text, raw_text, completed, category, priority,
+             due_date, due_time, due_period, due_at, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
         )
-          .bind(text.trim(), completed ? 1 : 0, createdAt)
+          .bind(text.trim(), task.rawText, completed ? 1 : 0, task.category,
+            task.priority, task.dueDate, task.dueTime, task.duePeriod,
+            task.dueAt, createdAt)
           .run();
 
         return jsonResponse(
@@ -395,8 +444,10 @@ export default {
         body,
         "completed",
       );
+      const taskKeys = ["category", "priority", "dueDate", "dueTime", "duePeriod"];
+      const hasTaskFields = taskKeys.some((key) => Object.prototype.hasOwnProperty.call(body, key));
 
-      if (!hasText && !hasCompleted) {
+      if (!hasText && !hasCompleted && !hasTaskFields) {
         return jsonResponse(request, { error: "No update fields provided" }, 400);
       }
 
@@ -422,6 +473,24 @@ export default {
           assignments.push("completed = ?");
           values.push(body.completed ? 1 : 0);
         }
+        if (Object.prototype.hasOwnProperty.call(body, "rawText")) {
+          return jsonResponse(request, { error: "rawText cannot be updated" }, 400);
+        }
+        if (Object.prototype.hasOwnProperty.call(body, "category")) {
+          if (!TASK_CATEGORIES.has(body.category)) return jsonResponse(request, { error: "Invalid task data" }, 400);
+          assignments.push("category = ?"); values.push(body.category);
+        }
+        if (Object.prototype.hasOwnProperty.call(body, "priority")) {
+          if (!TASK_PRIORITIES.has(body.priority)) return jsonResponse(request, { error: "Invalid task data" }, 400);
+          assignments.push("priority = ?"); values.push(body.priority);
+        }
+        if (["dueDate", "dueTime", "duePeriod"].some((key) => Object.prototype.hasOwnProperty.call(body, key))) {
+          let due;
+          try { due = normalizeDueFields(body.dueDate ?? null, body.dueTime ?? null, body.duePeriod ?? "none"); }
+          catch { return jsonResponse(request, { error: "Invalid task data" }, 400); }
+          assignments.push("due_date = ?", "due_time = ?", "due_period = ?", "due_at = ?");
+          values.push(due.dueDate, due.dueTime, due.duePeriod, due.dueAt);
+        }
         assignments.push("updated_at = ?");
         values.push(updatedAt, id);
 
@@ -441,6 +510,13 @@ export default {
           `SELECT
             id,
             text,
+            raw_text AS rawText,
+            category,
+            priority,
+            due_date AS dueDate,
+            due_time AS dueTime,
+            due_period AS duePeriod,
+            due_at AS dueAt,
             completed,
             created_at AS createdAt,
             updated_at AS updatedAt
@@ -454,10 +530,7 @@ export default {
           return jsonResponse(request, { error: "Memo not found" }, 404);
         }
 
-        return jsonResponse(request, {
-          ...memo,
-          completed: Boolean(memo.completed),
-        });
+        return jsonResponse(request, memoTaskResponse(memo));
       } catch (error) {
         console.error("D1 PATCH /memos/:id error", error);
         return jsonResponse(request, { error: "Database error" }, 500);

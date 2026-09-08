@@ -34,6 +34,11 @@
       <div class="section-heading"><h2 id="draft-heading">文字起こし</h2><button id="clear-button" class="text-button" type="button">クリア</button></div>
       <label class="sr-only" for="transcript">文字起こし結果</label>
       <textarea id="transcript" rows="5" placeholder="ここに文字起こし結果が表示されます。直接修正することもできます。"></textarea>
+      <div class="task-fields" aria-label="メモの属性">
+        <label>期限<select id="draft-due"><option value="none">期限なし</option><option value="today">今日</option><option value="tomorrow">明日</option><option value="this_week">今週</option></select></label>
+        <label>優先度<select id="draft-priority"><option value="urgent">急ぎ</option><option value="normal" selected>通常</option><option value="low">低め</option></select></label>
+        <label>種別<select id="draft-category"><option value="repair">修理</option><option value="estimate">見積</option><option value="visit">訪問</option><option value="inspection">点検</option><option value="contact">連絡</option><option value="order">発注</option><option value="other" selected>その他</option></select></label>
+      </div>
       <button id="save-button" class="save-button" type="button" disabled>
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h12l2 2v14H5V4Z"/><path d="M8 4v6h8V4M8 20v-6h8v6"/></svg>メモを保存
       </button>
@@ -68,8 +73,14 @@
   <template id="memo-template">
     <article class="memo-card">
       <div class="memo-card-top"><time class="memo-date"></time><button class="status-button" type="button"></button></div>
+      <div class="memo-attributes"><span class="due-badge"></span><span class="priority-badge"></span><span class="category-badge"></span></div>
       <p class="memo-text"></p>
       <textarea class="edit-textarea" rows="4" aria-label="メモ本文を編集" hidden></textarea>
+      <div class="edit-task-fields" hidden>
+        <label>期限<select class="edit-due"><option value="none">期限なし</option><option value="today">今日</option><option value="tomorrow">明日</option><option value="this_week">今週</option></select></label>
+        <label>優先度<select class="edit-priority"><option value="urgent">急ぎ</option><option value="normal">通常</option><option value="low">低め</option></select></label>
+        <label>種別<select class="edit-category"><option value="repair">修理</option><option value="estimate">見積</option><option value="visit">訪問</option><option value="inspection">点検</option><option value="contact">連絡</option><option value="order">発注</option><option value="other">その他</option></select></label>
+      </div>
       <div class="memo-actions">
         <button class="edit-button" type="button">編集</button>
         <button class="delete-button" type="button" aria-label="このメモを削除"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg>削除</button>
