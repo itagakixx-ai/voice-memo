@@ -57,7 +57,8 @@ function memoTaskResponse(memo) {
     category: TASK_CATEGORIES.has(memo.category) ? memo.category : "other",
     priority: TASK_PRIORITIES.has(memo.priority) ? memo.priority : "normal",
     dueDate: memo.dueDate ?? null, dueTime: memo.dueTime ?? null,
-    duePeriod: DUE_PERIODS.has(memo.duePeriod) ? memo.duePeriod : "none", dueAt: memo.dueAt ?? null };
+    duePeriod: DUE_PERIODS.has(memo.duePeriod) ? memo.duePeriod : "none", dueAt: memo.dueAt ?? null,
+    parserVersion: typeof memo.parserVersion === "string" ? memo.parserVersion : null };
 }
 
 async function secureTokenMatches(candidate, expected) {
@@ -236,6 +237,7 @@ export default {
             due_time AS dueTime,
             due_period AS duePeriod,
             due_at AS dueAt,
+            parser_version AS parserVersion,
             completed,
             created_at AS createdAt,
             updated_at AS updatedAt
@@ -282,7 +284,9 @@ export default {
         if (!TASK_PRIORITIES.has(priority) || !TASK_CATEGORIES.has(category)) throw new Error("Invalid task fields");
         const due = normalizeDueFields(body.dueDate ?? null, body.dueTime ?? null, body.duePeriod ?? "none");
         if (body.rawText !== undefined && (typeof body.rawText !== "string" || body.rawText.trim() === "")) throw new Error("Invalid raw text");
-        task = { priority, category, rawText: body.rawText?.trim() ?? text.trim(), ...due };
+        const parserVersion = body.parserVersion ?? null;
+        if (parserVersion !== null && parserVersion !== "rules-v1") throw new Error("Invalid parser version");
+        task = { priority, category, rawText: body.rawText?.trim() ?? text.trim(), parserVersion, ...due };
       } catch {
         return jsonResponse(request, { error: "Invalid task data" }, 400);
       }
@@ -290,12 +294,12 @@ export default {
       try {
         const result = await env.DB.prepare(
           `INSERT INTO memos (text, raw_text, completed, category, priority,
-             due_date, due_time, due_period, due_at, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+             due_date, due_time, due_period, due_at, parser_version, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
         )
           .bind(text.trim(), task.rawText, completed ? 1 : 0, task.category,
             task.priority, task.dueDate, task.dueTime, task.duePeriod,
-            task.dueAt, createdAt)
+            task.dueAt, task.parserVersion, createdAt)
           .run();
 
         return jsonResponse(
@@ -517,6 +521,7 @@ export default {
             due_time AS dueTime,
             due_period AS duePeriod,
             due_at AS dueAt,
+            parser_version AS parserVersion,
             completed,
             created_at AS createdAt,
             updated_at AS updatedAt

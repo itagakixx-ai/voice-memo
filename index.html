@@ -36,8 +36,14 @@
       <textarea id="transcript" rows="5" placeholder="ここに文字起こし結果が表示されます。直接修正することもできます。"></textarea>
       <div class="task-fields" aria-label="メモの属性">
         <label>期限<select id="draft-due"><option value="none">期限なし</option><option value="today">今日</option><option value="tomorrow">明日</option><option value="this_week">今週</option></select></label>
+        <label>時間帯<select id="draft-due-period"><option value="all_day">指定なし</option><option value="morning">午前</option><option value="afternoon">午後</option><option value="exact">時刻指定</option></select></label>
+        <label id="draft-time-label" hidden>時刻<input id="draft-due-time" type="time" step="60"></label>
         <label>優先度<select id="draft-priority"><option value="urgent">急ぎ</option><option value="normal" selected>通常</option><option value="low">低め</option></select></label>
         <label>種別<select id="draft-category"><option value="repair">修理</option><option value="estimate">見積</option><option value="visit">訪問</option><option value="inspection">点検</option><option value="contact">連絡</option><option value="order">発注</option><option value="other" selected>その他</option></select></label>
+      </div>
+      <div class="parser-actions">
+        <button id="reparse-button" class="text-button" type="button" disabled>原文から再解析</button>
+        <span id="parser-status" role="status" aria-live="polite"></span>
       </div>
       <button id="save-button" class="save-button" type="button" disabled>
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h12l2 2v14H5V4Z"/><path d="M8 4v6h8V4M8 20v-6h8v6"/></svg>メモを保存
@@ -78,6 +84,8 @@
       <textarea class="edit-textarea" rows="4" aria-label="メモ本文を編集" hidden></textarea>
       <div class="edit-task-fields" hidden>
         <label>期限<select class="edit-due"><option value="none">期限なし</option><option value="today">今日</option><option value="tomorrow">明日</option><option value="this_week">今週</option></select></label>
+        <label>時間帯<select class="edit-due-period"><option value="all_day">指定なし</option><option value="morning">午前</option><option value="afternoon">午後</option><option value="exact">時刻指定</option></select></label>
+        <label class="edit-time-label" hidden>時刻<input class="edit-due-time" type="time" step="60"></label>
         <label>優先度<select class="edit-priority"><option value="urgent">急ぎ</option><option value="normal">通常</option><option value="low">低め</option></select></label>
         <label>種別<select class="edit-category"><option value="repair">修理</option><option value="estimate">見積</option><option value="visit">訪問</option><option value="inspection">点検</option><option value="contact">連絡</option><option value="order">発注</option><option value="other">その他</option></select></label>
       </div>
@@ -88,6 +96,7 @@
       <div class="edit-actions" hidden><button class="cancel-edit-button" type="button">キャンセル</button><button class="save-edit-button" type="button">変更を保存</button></div>
     </article>
   </template>
+  <script src="voice-parser.js" defer></script>
   <script src="app.js" defer></script>
 </body>
 </html>
