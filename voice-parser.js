@@ -19,9 +19,24 @@
   ]);
   const LOW_PRIORITY_WORDS = Object.freeze(["急がない", "低優先", "後回し"]);
   const URGENT_WORDS = Object.freeze(["大至急", "なるべく早く", "至急", "緊急", "急ぎ"]);
+  const SPEECH_CORRECTION_RULES = Object.freeze([
+    Object.freeze({ name: "today-end-professor", pattern: /教授/g, replacement: "今日中" }),
+    Object.freeze({ name: "today-end-shochu", pattern: /焼酎/g, replacement: "今日中" }),
+    Object.freeze({
+      name: "today-ten-isolated",
+      pattern: /(^|[\s、。，．,!?！？])今日10(?=\s*(?:$|[、。，．,!?！？]))/g,
+      replacement: "$1今日中",
+    }),
+  ]);
 
   function normalizeJapaneseText(value) {
     return String(value ?? "").normalize("NFKC").replace(/[\u3000\t\r\n]+/g, " ").replace(/\s+/g, " ").trim();
+  }
+  function normalizeSpeechForParsing(rawText) {
+    return SPEECH_CORRECTION_RULES.reduce(
+      (text, rule) => text.replace(rule.pattern, rule.replacement),
+      normalizeJapaneseText(rawText),
+    );
   }
 
   function jstDate(now = new Date(), offset = 0) {
@@ -99,7 +114,7 @@
 
   function parseVoiceMemo(rawText, now = new Date()) {
     const original = String(rawText ?? "").trim();
-    const normalized = normalizeJapaneseText(original);
+    const normalized = normalizeSpeechForParsing(original);
     if (!normalized) return null;
     return {
       rawText: original,
@@ -111,5 +126,5 @@
     };
   }
 
-  return { PARSER_VERSION, CATEGORY_RULES, CATEGORY_PRIORITY, normalizeJapaneseText, jstDate, parseRelativeDate, parseTime, parseDue, parsePriority, parseCategory, buildTextCandidate, parseVoiceMemo };
+  return { PARSER_VERSION, CATEGORY_RULES, CATEGORY_PRIORITY, SPEECH_CORRECTION_RULES, normalizeJapaneseText, normalizeSpeechForParsing, jstDate, parseRelativeDate, parseTime, parseDue, parsePriority, parseCategory, buildTextCandidate, parseVoiceMemo };
 });
