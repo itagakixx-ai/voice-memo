@@ -35,9 +35,11 @@
       <label class="sr-only" for="transcript">文字起こし結果</label>
       <textarea id="transcript" rows="5" placeholder="ここに文字起こし結果が表示されます。直接修正することもできます。"></textarea>
       <div class="task-fields" aria-label="メモの属性">
-        <label>期限<select id="draft-due"><option value="none">期限なし</option><option value="today">今日</option><option value="tomorrow">明日</option><option value="this_week">今週</option></select></label>
-        <label>時間帯<select id="draft-due-period"><option value="all_day">指定なし</option><option value="morning">午前</option><option value="afternoon">午後</option><option value="exact">時刻指定</option></select></label>
+        <label>期限<select id="draft-due"><option value="none">期限なし</option><option value="today">今日</option><option value="tomorrow">明日</option><option value="this_week">今週</option><option value="custom">日時指定</option></select></label>
+        <label id="draft-period-label">時間帯<select id="draft-due-period"><option value="all_day">指定なし</option><option value="morning">午前</option><option value="afternoon">午後</option><option value="exact">時刻指定</option></select></label>
         <label id="draft-time-label" hidden>時刻<input id="draft-due-time" type="time" step="60"></label>
+        <label id="draft-custom-date-label" hidden>日付<input id="draft-custom-date" type="date"></label>
+        <label id="draft-custom-time-label" hidden>時刻（任意）<input id="draft-custom-time" type="time" step="60"></label>
         <label>優先度<select id="draft-priority"><option value="urgent">急ぎ</option><option value="normal" selected>通常</option><option value="low">低め</option></select></label>
         <label>種別<select id="draft-category"><option value="repair">修理</option><option value="estimate">見積</option><option value="visit">訪問</option><option value="inspection">点検</option><option value="contact">連絡</option><option value="order">発注</option><option value="other" selected>その他</option></select></label>
       </div>
@@ -83,9 +85,11 @@
       <p class="memo-text"></p>
       <textarea class="edit-textarea" rows="4" aria-label="メモ本文を編集" hidden></textarea>
       <div class="edit-task-fields" hidden>
-        <label>期限<select class="edit-due"><option value="none">期限なし</option><option value="today">今日</option><option value="tomorrow">明日</option><option value="this_week">今週</option></select></label>
-        <label>時間帯<select class="edit-due-period"><option value="all_day">指定なし</option><option value="morning">午前</option><option value="afternoon">午後</option><option value="exact">時刻指定</option></select></label>
+        <label>期限<select class="edit-due"><option value="none">期限なし</option><option value="today">今日</option><option value="tomorrow">明日</option><option value="this_week">今週</option><option value="custom">日時指定</option></select></label>
+        <label class="edit-period-label">時間帯<select class="edit-due-period"><option value="all_day">指定なし</option><option value="morning">午前</option><option value="afternoon">午後</option><option value="exact">時刻指定</option></select></label>
         <label class="edit-time-label" hidden>時刻<input class="edit-due-time" type="time" step="60"></label>
+        <label class="edit-custom-date-label" hidden>日付<input class="edit-custom-date" type="date"></label>
+        <label class="edit-custom-time-label" hidden>時刻（任意）<input class="edit-custom-time" type="time" step="60"></label>
         <label>優先度<select class="edit-priority"><option value="urgent">急ぎ</option><option value="normal">通常</option><option value="low">低め</option></select></label>
         <label>種別<select class="edit-category"><option value="repair">修理</option><option value="estimate">見積</option><option value="visit">訪問</option><option value="inspection">点検</option><option value="contact">連絡</option><option value="order">発注</option><option value="other">その他</option></select></label>
       </div>
