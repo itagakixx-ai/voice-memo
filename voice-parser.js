@@ -47,7 +47,46 @@
     return new Date(Date.UTC(+values.year, +values.month - 1, +values.day + offset)).toISOString().slice(0, 10);
   }
 
-  // v1 intentionally handles relative dates only. Concrete dates can be added here later.
+  function jstYearMonth(now = new Date()) {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit",
+    }).formatToParts(now);
+    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return { year: Number(values.year), month: Number(values.month) };
+  }
+
+  function validCalendarDate(year, month, day) {
+    const candidate = new Date(Date.UTC(year, month - 1, day));
+    return candidate.getUTCFullYear() === year
+      && candidate.getUTCMonth() === month - 1
+      && candidate.getUTCDate() === day;
+  }
+
+  function concreteDateResult(match, prefix, year, month, day) {
+    const start = match.index + prefix.length;
+    const matchedText = match[0].slice(prefix.length);
+    if (!validCalendarDate(year, month, day)) {
+      return { status: "invalid", dueDate: null, start, end: start + matchedText.length, matchedText };
+    }
+    return {
+      status: "valid",
+      dueDate: `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+      start,
+      end: start + matchedText.length,
+      matchedText,
+    };
+  }
+
+  function parseConcreteDate(text, now = new Date()) {
+    const { year, month: currentMonth } = jstYearMonth(now);
+    let match = /(^|[^0-9])(\d{1,2})\s*(?:月\s*|\/\s*)(\d{1,2})\s*日?(?:の)?/.exec(text);
+    if (match) return concreteDateResult(match, match[1], year, Number(match[2]), Number(match[3]));
+    match = /(^|[^0-9月/])(\d{1,2})\s*日(?:の)?/.exec(text);
+    if (match) return concreteDateResult(match, match[1], year, currentMonth, Number(match[2]));
+    return { status: "absent", dueDate: null, start: -1, end: -1, matchedText: "" };
+  }
+
+  // Relative-date rules remain separate from concrete calendar-date parsing.
   function parseRelativeDate(text, now = new Date()) {
     if (/(?:明日|あした)/.test(text)) return { kind: "tomorrow", dueDate: jstDate(now, 1) };
     if (/(?:今日中|今日|本日)/.test(text)) return { kind: "today", dueDate: jstDate(now) };
@@ -70,6 +109,16 @@
   }
 
   function parseDue(text, now = new Date()) {
+    const concreteDate = parseConcreteDate(text, now);
+    if (concreteDate.status === "invalid") {
+      return { dueDate: null, dueTime: null, duePeriod: "none", duePreset: "none" };
+    }
+    if (concreteDate.status === "valid") {
+      const dueTime = parseTime(text);
+      return dueTime
+        ? { dueDate: concreteDate.dueDate, dueTime, duePeriod: "exact", duePreset: "custom" }
+        : { dueDate: concreteDate.dueDate, dueTime: null, duePeriod: "all_day", duePreset: "custom" };
+    }
     const date = parseRelativeDate(text, now);
     const dueTime = parseTime(text);
     const period = /午前中|午前/.test(text) ? "morning" : /午後/.test(text) ? "afternoon" : null;
@@ -93,15 +142,29 @@
     return CATEGORY_PRIORITY.find((category) => CATEGORY_RULES[category].some((word) => text.includes(word))) || "other";
   }
 
-  function buildTextCandidate(rawText) {
+  function removeTextRange(text, start, end) {
+    return `${text.slice(0, start)} ${text.slice(end)}`;
+  }
+
+  function buildTextCandidate(rawText, now = new Date()) {
     const raw = normalizeJapaneseText(rawText);
-    let candidate = raw
-      .replace(/(?:今日中|今日|本日|明日|あした)(?:の)?/g, " ")
-      .replace(/(?:今週中|今週|期限なし)/g, " ")
-      .replace(/(?:午前中|午前|午後)(?:まで|に)?/g, " ")
-      .replace(/(?:[01]?\d|2[0-3])\s*時\s*半(?:まで|に)?/g, " ")
-      .replace(/(?:[01]?\d|2[0-3])\s*[:：]\s*[0-5]\d(?:まで|に)?/g, " ")
-      .replace(/(?:[01]?\d|2[0-3])\s*時(?:まで|に)?/g, " ")
+    const concreteDate = parseConcreteDate(raw, now);
+    let candidate = raw;
+    if (concreteDate.status === "valid") {
+      candidate = removeTextRange(candidate, concreteDate.start, concreteDate.end)
+        .replace(/(?:[01]?\d|2[0-3])\s*時\s*半(?:まで|に)?/g, " ")
+        .replace(/(?:[01]?\d|2[0-3])\s*[:：]\s*[0-5]\d(?:まで|に)?/g, " ")
+        .replace(/(?:[01]?\d|2[0-3])\s*時(?:まで|に)?/g, " ");
+    } else if (concreteDate.status === "absent") {
+      candidate = candidate
+        .replace(/(?:今日中|今日|本日|明日|あした)(?:の)?/g, " ")
+        .replace(/(?:今週中|今週|期限なし)/g, " ")
+        .replace(/(?:午前中|午前|午後)(?:まで|に)?/g, " ")
+        .replace(/(?:[01]?\d|2[0-3])\s*時\s*半(?:まで|に)?/g, " ")
+        .replace(/(?:[01]?\d|2[0-3])\s*[:：]\s*[0-5]\d(?:まで|に)?/g, " ")
+        .replace(/(?:[01]?\d|2[0-3])\s*時(?:まで|に)?/g, " ");
+    }
+    candidate = candidate
       .replace(/(?:急がない|低優先|後回し|大至急|なるべく早く|至急|緊急|急ぎ)/g, " ")
       .replace(/[、。，．,]+/g, " ")
       .replace(/\s+/g, " ")
@@ -118,7 +181,7 @@
     if (!normalized) return null;
     return {
       rawText: original,
-      text: buildTextCandidate(normalized),
+      text: buildTextCandidate(normalized, now),
       category: parseCategory(normalized),
       priority: parsePriority(normalized),
       ...parseDue(normalized, now),
@@ -126,5 +189,5 @@
     };
   }
 
-  return { PARSER_VERSION, CATEGORY_RULES, CATEGORY_PRIORITY, SPEECH_CORRECTION_RULES, normalizeJapaneseText, normalizeSpeechForParsing, jstDate, parseRelativeDate, parseTime, parseDue, parsePriority, parseCategory, buildTextCandidate, parseVoiceMemo };
+  return { PARSER_VERSION, CATEGORY_RULES, CATEGORY_PRIORITY, SPEECH_CORRECTION_RULES, normalizeJapaneseText, normalizeSpeechForParsing, jstDate, parseConcreteDate, parseRelativeDate, parseTime, parseDue, parsePriority, parseCategory, buildTextCandidate, parseVoiceMemo };
 });
