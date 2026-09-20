@@ -33,6 +33,30 @@ function jsonResponse(request, data, status = 200) {
 const TASK_PRIORITIES = new Set(["urgent", "normal", "low"]);
 const TASK_CATEGORIES = new Set(["repair", "estimate", "visit", "inspection", "contact", "order", "other"]);
 const DUE_PERIODS = new Set(["none", "all_day", "morning", "afternoon", "exact", "this_week"]);
+const MEMO_STATUSES = new Set(["pending", "in_progress", "completed"]);
+
+function statusFromCompleted(completed) {
+  return completed ? "completed" : "pending";
+}
+
+function completedFromStatus(status) {
+  return status === "completed";
+}
+
+function normalizeMemoState(body, required = false) {
+  const hasStatus = Object.prototype.hasOwnProperty.call(body, "status");
+  const hasCompleted = Object.prototype.hasOwnProperty.call(body, "completed");
+  if (!hasStatus && !hasCompleted) {
+    if (required) throw new Error("Missing memo state");
+    return null;
+  }
+  if (hasStatus && !MEMO_STATUSES.has(body.status)) throw new Error("Invalid memo status");
+  if (hasCompleted && typeof body.completed !== "boolean") throw new Error("Invalid completed value");
+  const status = hasStatus ? body.status : statusFromCompleted(body.completed);
+  const completed = completedFromStatus(status);
+  if (hasStatus && hasCompleted && body.completed !== completed) throw new Error("Inconsistent memo state");
+  return { status, completed };
+}
 
 function normalizeDueFields(dueDate, dueTime, duePeriod) {
   if (!DUE_PERIODS.has(duePeriod)) throw new Error("Invalid due period");
@@ -53,7 +77,10 @@ function normalizeDueFields(dueDate, dueTime, duePeriod) {
 }
 
 function memoTaskResponse(memo) {
-  return { ...memo, completed: Boolean(memo.completed), rawText: memo.rawText ?? memo.text,
+  const status = MEMO_STATUSES.has(memo.status)
+    ? memo.status
+    : statusFromCompleted(Boolean(memo.completed));
+  return { ...memo, status, completed: completedFromStatus(status), rawText: memo.rawText ?? memo.text,
     category: TASK_CATEGORIES.has(memo.category) ? memo.category : "other",
     priority: TASK_PRIORITIES.has(memo.priority) ? memo.priority : "normal",
     dueDate: memo.dueDate ?? null, dueTime: memo.dueTime ?? null,
@@ -238,6 +265,7 @@ export default {
             due_period AS duePeriod,
             due_at AS dueAt,
             parser_version AS parserVersion,
+            status,
             completed,
             created_at AS createdAt,
             updated_at AS updatedAt
@@ -266,11 +294,10 @@ export default {
         return jsonResponse(request, { error: "Invalid JSON" }, 400);
       }
 
-      const { text, completed, createdAt } = body;
+      const { text, createdAt } = body;
       if (
         typeof text !== "string" ||
         text.trim() === "" ||
-        typeof completed !== "boolean" ||
         typeof createdAt !== "string" ||
         createdAt.trim() === ""
       ) {
@@ -278,7 +305,9 @@ export default {
       }
 
       let task;
+      let state;
       try {
+        state = normalizeMemoState(body, true);
         const priority = body.priority ?? "normal";
         const category = body.category ?? "other";
         if (!TASK_PRIORITIES.has(priority) || !TASK_CATEGORIES.has(category)) throw new Error("Invalid task fields");
@@ -293,11 +322,11 @@ export default {
 
       try {
         const result = await env.DB.prepare(
-          `INSERT INTO memos (text, raw_text, completed, category, priority,
+          `INSERT INTO memos (text, raw_text, status, completed, category, priority,
              due_date, due_time, due_period, due_at, parser_version, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
         )
-          .bind(text.trim(), task.rawText, completed ? 1 : 0, task.category,
+          .bind(text.trim(), task.rawText, state.status, state.completed ? 1 : 0, task.category,
             task.priority, task.dueDate, task.dueTime, task.duePeriod,
             task.dueAt, task.parserVersion, createdAt)
           .run();
@@ -448,17 +477,24 @@ export default {
         body,
         "completed",
       );
+      const hasStatus = Object.prototype.hasOwnProperty.call(body, "status");
       const taskKeys = ["category", "priority", "dueDate", "dueTime", "duePeriod"];
       const hasTaskFields = taskKeys.some((key) => Object.prototype.hasOwnProperty.call(body, key));
 
-      if (!hasText && !hasCompleted && !hasTaskFields) {
+      if (!hasText && !hasStatus && !hasCompleted && !hasTaskFields) {
         return jsonResponse(request, { error: "No update fields provided" }, 400);
       }
 
       if (
-        (hasText && (typeof body.text !== "string" || body.text.trim() === "")) ||
-        (hasCompleted && typeof body.completed !== "boolean")
+        (hasText && (typeof body.text !== "string" || body.text.trim() === ""))
       ) {
+        return jsonResponse(request, { error: "Invalid memo data" }, 400);
+      }
+
+      let stateUpdate;
+      try {
+        stateUpdate = normalizeMemoState(body);
+      } catch {
         return jsonResponse(request, { error: "Invalid memo data" }, 400);
       }
 
@@ -473,9 +509,9 @@ export default {
           assignments.push("text = ?");
           values.push(body.text.trim());
         }
-        if (hasCompleted) {
-          assignments.push("completed = ?");
-          values.push(body.completed ? 1 : 0);
+        if (stateUpdate) {
+          assignments.push("status = ?", "completed = ?");
+          values.push(stateUpdate.status, stateUpdate.completed ? 1 : 0);
         }
         if (Object.prototype.hasOwnProperty.call(body, "rawText")) {
           return jsonResponse(request, { error: "rawText cannot be updated" }, 400);
@@ -522,6 +558,7 @@ export default {
             due_period AS duePeriod,
             due_at AS dueAt,
             parser_version AS parserVersion,
+            status,
             completed,
             created_at AS createdAt,
             updated_at AS updatedAt
