@@ -53,7 +53,12 @@
       <p id="feedback" class="feedback" role="status" aria-live="polite"></p>
     </section>
 
-    <section class="memo-section" aria-labelledby="memo-heading">
+    <div class="view-tabs" role="tablist" aria-label="メモの表示方法">
+      <button id="list-tab" class="view-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="list-view" tabindex="0">一覧</button>
+      <button id="calendar-tab" class="view-tab" type="button" role="tab" aria-selected="false" aria-controls="calendar-view" tabindex="-1">カレンダー</button>
+    </div>
+
+    <section id="list-view" class="memo-section" role="tabpanel" aria-labelledby="list-tab">
       <div class="section-heading memo-heading-row"><h2 id="memo-heading">保存したメモ</h2><span id="memo-count" class="memo-count">0件</span></div>
       <div class="memo-filters" role="group" aria-label="メモの絞り込み">
         <button class="filter-button is-active" type="button" data-filter="all" aria-pressed="true">すべて</button>
@@ -62,6 +67,25 @@
         <button class="filter-button" type="button" data-filter="completed" aria-pressed="false">完了</button>
       </div>
       <div id="memo-list"></div>
+    </section>
+
+    <section id="calendar-view" class="calendar-section" role="tabpanel" aria-labelledby="calendar-tab" hidden>
+      <div class="calendar-toolbar">
+        <button id="calendar-prev" class="calendar-nav" type="button" aria-label="前の月">＜</button>
+        <h2 id="calendar-month" aria-live="polite"></h2>
+        <button id="calendar-next" class="calendar-nav" type="button" aria-label="次の月">＞</button>
+      </div>
+      <button id="calendar-today" class="calendar-today" type="button">今日</button>
+      <div class="calendar-weekdays" aria-hidden="true"><span>日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span></div>
+      <div id="calendar-grid" class="calendar-grid" role="grid" aria-labelledby="calendar-month"></div>
+      <section class="calendar-summary" aria-labelledby="week-tasks-heading">
+        <h3 id="week-tasks-heading">今週タスク</h3>
+        <div id="week-task-list"></div>
+      </section>
+      <section class="calendar-summary" aria-labelledby="selected-day-heading">
+        <h3 id="selected-day-heading">選択日の予定</h3>
+        <div id="selected-day-list"></div>
+      </section>
     </section>
     <section class="diagnostic-section" aria-labelledby="diagnostic-heading">
       <button id="diagnostic-toggle" class="diagnostic-toggle" type="button" aria-expanded="false" aria-controls="diagnostic-panel">音声認識の診断</button>
