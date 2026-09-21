@@ -54,11 +54,36 @@
     </section>
 
     <div class="view-tabs" role="tablist" aria-label="メモの表示方法">
-      <button id="list-tab" class="view-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="list-view" tabindex="0">一覧</button>
+      <button id="today-tab" class="view-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="today-view" tabindex="0">今日</button>
+      <button id="list-tab" class="view-tab" type="button" role="tab" aria-selected="false" aria-controls="list-view" tabindex="-1">一覧</button>
       <button id="calendar-tab" class="view-tab" type="button" role="tab" aria-selected="false" aria-controls="calendar-view" tabindex="-1">カレンダー</button>
     </div>
 
-    <section id="list-view" class="memo-section" role="tabpanel" aria-labelledby="list-tab">
+    <section id="today-view" class="today-section" role="tabpanel" aria-labelledby="today-tab">
+      <div class="today-heading"><div><p class="eyebrow">TODAY</p><h2>今日の業務</h2></div><time id="today-date"></time></div>
+      <section class="dashboard-block" aria-labelledby="today-schedule-heading">
+        <div class="dashboard-block-heading"><h3 id="today-schedule-heading">今日の予定</h3><span id="today-schedule-count" class="dashboard-count">0件</span></div>
+        <div id="today-schedule-list"></div>
+      </section>
+      <section class="dashboard-block" aria-labelledby="in-progress-heading">
+        <div class="dashboard-block-heading"><h3 id="in-progress-heading">対応中</h3><span id="in-progress-count" class="dashboard-count">0件</span></div>
+        <div id="in-progress-list"></div>
+      </section>
+      <section class="dashboard-block" aria-labelledby="urgent-heading">
+        <div class="dashboard-block-heading"><h3 id="urgent-heading">急ぎ</h3><span id="urgent-count" class="dashboard-count">0件</span></div>
+        <div id="urgent-list"></div>
+      </section>
+      <section class="dashboard-block" aria-labelledby="dashboard-week-heading">
+        <div class="dashboard-block-heading"><h3 id="dashboard-week-heading">今週タスク</h3><span id="dashboard-week-count" class="dashboard-count">0件</span></div>
+        <div id="dashboard-week-list"></div>
+      </section>
+      <section class="dashboard-block" aria-labelledby="tomorrow-heading">
+        <div class="dashboard-block-heading"><h3 id="tomorrow-heading">明日の予定</h3><span id="tomorrow-count" class="dashboard-count">0件</span></div>
+        <div id="tomorrow-list"></div>
+      </section>
+    </section>
+
+    <section id="list-view" class="memo-section" role="tabpanel" aria-labelledby="list-tab" hidden>
       <div class="section-heading memo-heading-row"><h2 id="memo-heading">保存したメモ</h2><span id="memo-count" class="memo-count">0件</span></div>
       <div class="memo-filters" role="group" aria-label="メモの絞り込み">
         <button class="filter-button is-active" type="button" data-filter="all" aria-pressed="true">すべて</button>
