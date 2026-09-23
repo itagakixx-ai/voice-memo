@@ -34,6 +34,7 @@ const TASK_PRIORITIES = new Set(["urgent", "normal", "low"]);
 const TASK_CATEGORIES = new Set(["repair", "estimate", "visit", "inspection", "contact", "order", "other"]);
 const DUE_PERIODS = new Set(["none", "all_day", "morning", "afternoon", "exact", "this_week"]);
 const MEMO_STATUSES = new Set(["pending", "in_progress", "completed"]);
+const QUICK_ACTIONS = new Set(["none", "order", "manufacturer", "customer_contact", "stock_check", "other"]);
 
 function statusFromCompleted(completed) {
   return completed ? "completed" : "pending";
@@ -85,6 +86,7 @@ function memoTaskResponse(memo) {
     priority: TASK_PRIORITIES.has(memo.priority) ? memo.priority : "normal",
     dueDate: memo.dueDate ?? null, dueTime: memo.dueTime ?? null,
     duePeriod: DUE_PERIODS.has(memo.duePeriod) ? memo.duePeriod : "none", dueAt: memo.dueAt ?? null,
+    quickAction: QUICK_ACTIONS.has(memo.quickAction) ? memo.quickAction : "none",
     parserVersion: typeof memo.parserVersion === "string" ? memo.parserVersion : null };
 }
 
@@ -264,6 +266,7 @@ export default {
             due_time AS dueTime,
             due_period AS duePeriod,
             due_at AS dueAt,
+            quick_action AS quickAction,
             parser_version AS parserVersion,
             status,
             completed,
@@ -310,12 +313,13 @@ export default {
         state = normalizeMemoState(body, true);
         const priority = body.priority ?? "normal";
         const category = body.category ?? "other";
-        if (!TASK_PRIORITIES.has(priority) || !TASK_CATEGORIES.has(category)) throw new Error("Invalid task fields");
+        const quickAction = body.quickAction ?? "none";
+        if (!TASK_PRIORITIES.has(priority) || !TASK_CATEGORIES.has(category) || !QUICK_ACTIONS.has(quickAction)) throw new Error("Invalid task fields");
         const due = normalizeDueFields(body.dueDate ?? null, body.dueTime ?? null, body.duePeriod ?? "none");
         if (body.rawText !== undefined && (typeof body.rawText !== "string" || body.rawText.trim() === "")) throw new Error("Invalid raw text");
         const parserVersion = body.parserVersion ?? null;
         if (parserVersion !== null && parserVersion !== "rules-v1") throw new Error("Invalid parser version");
-        task = { priority, category, rawText: body.rawText?.trim() ?? text.trim(), parserVersion, ...due };
+        task = { priority, category, quickAction, rawText: body.rawText?.trim() ?? text.trim(), parserVersion, ...due };
       } catch {
         return jsonResponse(request, { error: "Invalid task data" }, 400);
       }
@@ -323,12 +327,12 @@ export default {
       try {
         const result = await env.DB.prepare(
           `INSERT INTO memos (text, raw_text, status, completed, category, priority,
-             due_date, due_time, due_period, due_at, parser_version, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+             due_date, due_time, due_period, due_at, quick_action, parser_version, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
         )
           .bind(text.trim(), task.rawText, state.status, state.completed ? 1 : 0, task.category,
             task.priority, task.dueDate, task.dueTime, task.duePeriod,
-            task.dueAt, task.parserVersion, createdAt)
+            task.dueAt, task.quickAction, task.parserVersion, createdAt)
           .run();
 
         return jsonResponse(
@@ -478,7 +482,7 @@ export default {
         "completed",
       );
       const hasStatus = Object.prototype.hasOwnProperty.call(body, "status");
-      const taskKeys = ["category", "priority", "dueDate", "dueTime", "duePeriod"];
+      const taskKeys = ["category", "priority", "dueDate", "dueTime", "duePeriod", "quickAction"];
       const hasTaskFields = taskKeys.some((key) => Object.prototype.hasOwnProperty.call(body, key));
 
       if (!hasText && !hasStatus && !hasCompleted && !hasTaskFields) {
@@ -524,6 +528,10 @@ export default {
           if (!TASK_PRIORITIES.has(body.priority)) return jsonResponse(request, { error: "Invalid task data" }, 400);
           assignments.push("priority = ?"); values.push(body.priority);
         }
+        if (Object.prototype.hasOwnProperty.call(body, "quickAction")) {
+          if (!QUICK_ACTIONS.has(body.quickAction)) return jsonResponse(request, { error: "Invalid task data" }, 400);
+          assignments.push("quick_action = ?"); values.push(body.quickAction);
+        }
         if (["dueDate", "dueTime", "duePeriod"].some((key) => Object.prototype.hasOwnProperty.call(body, key))) {
           let due;
           try { due = normalizeDueFields(body.dueDate ?? null, body.dueTime ?? null, body.duePeriod ?? "none"); }
@@ -557,6 +565,7 @@ export default {
             due_time AS dueTime,
             due_period AS duePeriod,
             due_at AS dueAt,
+            quick_action AS quickAction,
             parser_version AS parserVersion,
             status,
             completed,

@@ -34,6 +34,19 @@
       <div class="section-heading"><h2 id="draft-heading">文字起こし</h2><button id="clear-button" class="text-button" type="button">クリア</button></div>
       <label class="sr-only" for="transcript">文字起こし結果</label>
       <textarea id="transcript" rows="5" placeholder="ここに文字起こし結果が表示されます。直接修正することもできます。"></textarea>
+      <div class="memo-kind-switch" role="group" aria-label="メモの種類">
+        <button id="draft-kind-normal" class="memo-kind-button is-active" type="button" data-kind="normal" aria-pressed="true">通常メモ</button>
+        <button id="draft-kind-office" class="memo-kind-button" type="button" data-kind="office" aria-pressed="false">帰社後</button>
+      </div>
+      <label id="draft-quick-action-label" class="quick-action-field" hidden>帰社後の作業
+        <select id="draft-quick-action">
+          <option value="order">商品発注</option>
+          <option value="manufacturer">メーカー問い合わせ</option>
+          <option value="customer_contact">お客様へ連絡</option>
+          <option value="stock_check">在庫確認</option>
+          <option value="other">その他</option>
+        </select>
+      </label>
       <div class="task-fields" aria-label="メモの属性">
         <label>期限<select id="draft-due"><option value="none">期限なし</option><option value="today">今日</option><option value="tomorrow">明日</option><option value="this_week">今週</option><option value="custom">日時指定</option></select></label>
         <label id="draft-period-label">時間帯<select id="draft-due-period"><option value="all_day">指定なし</option><option value="morning">午前</option><option value="afternoon">午後</option><option value="exact">時刻指定</option></select></label>
@@ -65,6 +78,10 @@
         <div class="dashboard-block-heading"><h3 id="today-schedule-heading">今日の予定</h3><span id="today-schedule-count" class="dashboard-count">0件</span></div>
         <div id="today-schedule-list"></div>
       </section>
+      <section class="dashboard-block dashboard-office-block" aria-labelledby="office-actions-heading">
+        <div class="dashboard-block-heading"><h3 id="office-actions-heading">帰社後やること</h3><span id="office-actions-count" class="dashboard-count">0件</span></div>
+        <div id="office-actions-list"></div>
+      </section>
       <section class="dashboard-block" aria-labelledby="in-progress-heading">
         <div class="dashboard-block-heading"><h3 id="in-progress-heading">対応中</h3><span id="in-progress-count" class="dashboard-count">0件</span></div>
         <div id="in-progress-list"></div>
@@ -85,6 +102,12 @@
 
     <section id="list-view" class="memo-section" role="tabpanel" aria-labelledby="list-tab" hidden>
       <div class="section-heading memo-heading-row"><h2 id="memo-heading">保存したメモ</h2><span id="memo-count" class="memo-count">0件</span></div>
+      <div class="memo-search">
+        <label class="sr-only" for="memo-search-input">メモを検索</label>
+        <span class="memo-search-icon" aria-hidden="true">🔍</span>
+        <input id="memo-search-input" type="search" placeholder="メモを検索" autocomplete="off">
+        <button id="memo-search-clear" type="button" aria-label="検索をクリア" hidden>クリア</button>
+      </div>
       <div class="memo-filters" role="group" aria-label="メモの絞り込み">
         <button class="filter-button is-active" type="button" data-filter="all" aria-pressed="true">すべて</button>
         <button class="filter-button" type="button" data-filter="pending" aria-pressed="false">未対応</button>
@@ -131,10 +154,15 @@
   <template id="memo-template">
     <article class="memo-card">
       <div class="memo-card-top"><time class="memo-date"></time><button class="status-button" type="button"></button></div>
-      <div class="memo-attributes"><span class="due-badge"></span><span class="priority-badge"></span><span class="category-badge"></span></div>
+      <div class="memo-attributes"><span class="due-badge"></span><span class="priority-badge"></span><span class="category-badge"></span><span class="quick-action-badge" hidden></span></div>
       <p class="memo-text"></p>
       <textarea class="edit-textarea" rows="4" aria-label="メモ本文を編集" hidden></textarea>
       <div class="edit-task-fields" hidden>
+        <div class="edit-kind-switch memo-kind-switch" role="group" aria-label="メモの種類">
+          <button class="memo-kind-button is-active" type="button" data-kind="normal" aria-pressed="true">通常メモ</button>
+          <button class="memo-kind-button" type="button" data-kind="office" aria-pressed="false">帰社後</button>
+        </div>
+        <label class="edit-quick-action-label quick-action-field" hidden>帰社後の作業<select class="edit-quick-action"><option value="order">商品発注</option><option value="manufacturer">メーカー問い合わせ</option><option value="customer_contact">お客様へ連絡</option><option value="stock_check">在庫確認</option><option value="other">その他</option></select></label>
         <label>期限<select class="edit-due"><option value="none">期限なし</option><option value="today">今日</option><option value="tomorrow">明日</option><option value="this_week">今週</option><option value="custom">日時指定</option></select></label>
         <label class="edit-period-label">時間帯<select class="edit-due-period"><option value="all_day">指定なし</option><option value="morning">午前</option><option value="afternoon">午後</option><option value="exact">時刻指定</option></select></label>
         <label class="edit-time-label" hidden>時刻<input class="edit-due-time" type="time" step="60"></label>
